@@ -1,0 +1,107 @@
+# Версия docker-compose
+version: '3.7'
+# Список наших сервисов (контейнеров)
+services:
+    nginx:
+# используем последний стабильный образ nginx
+        build: ./images/nginx
+        container_name: ${APP_NAME}_${CONTAINER_NGINX}
+        # маршрутизируем порты
+        ports:
+              - 80:80
+              - 443:443
+        restart: always
+        # монтируем директории, слева директории на основной машине, справа - куда они монтируются в контейнере
+        volumes:
+            - ./hosts:/etc/nginx/conf.d/:ro
+            - ./proxy/certs:/etc/nginx/ssl/:ro
+            - ./www:/var/www/
+            - ./logs:/var/log/nginx
+        # nginx должен общаться с php контейнером
+        networks:
+           - php_net
+
+    php:
+        build: ./images/php-${PHP_VERSION}
+        container_name: ${APP_NAME}_${CONTAINER_PHP}
+        ports:
+            - 9000:9000
+        volumes:
+           - ./www:/var/www/
+           - ./images/php-${PHP_VERSION}/php.ini:/usr/local/etc/php-${PHP_VERSION}/conf.d/php.ini
+        #    - ./images/php-${PHP_VERSION}/opcache.ini:/usr/local/etc/php-${PHP_VERSION}/conf.d/opcache.ini
+        environment:
+            XDEBUG_CONFIG: remote_host=127.0.0.1
+        networks:
+           - php_net
+
+    # postgres:
+    #     image: ${DOCKER_POSTGRES}
+    #     # build: ./images/postgres
+    #     container_name: ${APP_NAME}_${CONTAINER_DB}
+    #     ports:
+    #        - 5432:5432
+    #     environment:
+    #         POSTGRES_DB: ${POSTGRES_DB}
+    #         POSTGRES_USER: ${POSTGRES_USER}
+    #         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    #         PGDATA: /var/lib/postgresql/data
+    #     volumes:
+    #        - postgres:/var/lib/postgresql/data
+    #     networks:
+    #        php_net:
+
+    mysql:
+        image: ${DOCKER_MYSQL}
+        container_name: ${APP_NAME}_${CONTAINER_DB}
+        command: --default-authentication-plugin=mysql_native_password
+        restart: always
+        ports:
+            - 3306:3306
+        environment:
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+        volumes:
+            # - /etc/mysql:/etc/mysql
+            # - ./logs/mysql:/var/log/mysql
+            - ./mysql:/var/lib/mysql
+#            - ./mysql-files:/var/lib/mysql-files
+        networks:
+            - php_net
+
+    # adminer:
+    #    image: ./images/adminer
+    #    container_name: phpadminer
+    #    restart: always
+    #    environment:
+    #         # - PMA_ARBITRARY=1
+    #         - MYSQL_PASSWORD=secret
+    #         - MYSQL_ROOT_PASSWORD=secret
+    #         - UPLOAD_LIMIT=300M
+    #    ports:
+    #        - 8080:8080
+    #    networks:
+    #        - php_net
+
+    phpmyadmin:
+        build: ./images/phpmyadmin
+        container_name: phpmyadmin
+        restart: 'always'
+        environment:
+            - PMA_ARBITRARY=1
+            - MYSQL_PASSWORD=password
+            - MYSQL_ROOT_PASSWORD=password
+            - UPLOAD_LIMIT=800M
+        ports:
+            - "8081:80"
+        networks:
+            - php_net
+
+networks:
+    php_net:
+        driver: bridge
+
+#volumes:
+    # postgres:
+    #     name: php_volume_psql
+#    mysql:
+#        name: php_volume_mysql
